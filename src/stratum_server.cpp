@@ -25,6 +25,7 @@
 #include "p2p_server.h"
 
 #include "rapidjson_wrapper.h"
+#include <curl/curl.h>
 
 LOG_CATEGORY(StratumServer)
 
