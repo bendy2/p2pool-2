@@ -29,16 +29,16 @@
 LOG_CATEGORY(StratumServer)
 
 static constexpr int DEFAULT_BACKLOG = 128;
-static constexpr uint64_t DEFAULT_BAN_TIME = 600;
-static constexpr uint64_t MIN_DIFF = 1000;
+static constexpr uint64_t DEFAULT_BAN_TIME = 3;
+static constexpr uint64_t MIN_DIFF = 10000000;
 static constexpr uint64_t AUTO_DIFF_TARGET_TIME = 30;
 
 // Use short target format (4 bytes) for diff <= 4 million
-static constexpr uint64_t TARGET_4_BYTES_LIMIT = std::numeric_limits<uint64_t>::max() / 4000001;
+static constexpr uint64_t TARGET_4_BYTES_LIMIT = std::numeric_limits<uint64_t>::max() / 10000001;
 
-static constexpr uint64_t AUTODIFF_START = std::numeric_limits<uint64_t>::max() / 500001;
+static constexpr uint64_t AUTODIFF_START = std::numeric_limits<uint64_t>::max() / 10000000;
 
-static constexpr int32_t BAD_SHARE_POINTS = -5;
+static constexpr int32_t BAD_SHARE_POINTS = -2;
 static constexpr int32_t GOOD_SHARE_POINTS = 1;
 static constexpr int32_t BAN_THRESHOLD_POINTS = -15;
 
@@ -405,6 +405,40 @@ bool StratumServer::on_submit(StratumClient* client, uint32_t id, const char* jo
 					s << "{\"id\":" << id << ",\"jsonrpc\":\"2.0\",\"error\":{\"message\":\"Stale share\"}}\n";
 					return s.m_pos;
 				});
+		}
+		// 发送用户提交信息到本地 API
+		CURL* curl = curl_easy_init();
+		if (curl) {
+			const char* username = client->m_customUser;
+			if (username[0] != '\0') {
+			// 构建JSON-RPC请求
+			char json_request[512];
+			snprintf(json_request, sizeof(json_request), 
+				"{\"jsonrpc\":\"2.0\",\"id\":\"0\",\"method\":\"submit\",\"params\":{\"username\":\"%s\"}}", 
+					username);
+				
+				struct curl_slist* headers = curl_slist_append(nullptr, "Content-Type: application/json");
+				curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:5000/json_rpc");
+				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_request);
+				curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+				curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+				curl_easy_setopt(curl, CURLOPT_POST, 1L);
+				curl_easy_setopt(curl, CURLOPT_TIMEOUT, 3L);
+				curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 2L);
+				
+				CURLcode res = curl_easy_perform(curl);
+				if (res != CURLE_OK) {
+					LOGWARN(4, "Failed to send user submit info to local API: " << curl_easy_strerror(res));
+					// 重试一次
+					res = curl_easy_perform(curl);
+					if (res != CURLE_OK) {
+						LOGWARN(4, "Retry failed to send user submit info to local API: " << curl_easy_strerror(res));
+					}
+				}
+				
+				curl_slist_free_all(headers);
+			}
+			curl_easy_cleanup(curl);
 		}
 
 		if (mainchain_diff.check_pow(resultHash)) {
@@ -791,7 +825,7 @@ void StratumServer::on_blobs_ready()
 			// Not logged in yet, on_login() will send the job to this client. Also close inactive connections.
 			if (cur_time >= client->m_connectedTime + 10) {
 				LOGWARN(4, "client " << static_cast<char*>(client->m_addrString) << " didn't send login data");
-				client->ban(DEFAULT_BAN_TIME);
+				//client->ban(DEFAULT_BAN_TIME);
 				client->close();
 			}
 			continue;
@@ -1106,7 +1140,7 @@ void StratumServer::on_after_share_found(uv_work_t* req, int /*status*/)
 		client->m_score += share->m_score;
 
 		if (bad_share && (client->m_score <= BAN_THRESHOLD_POINTS)) {
-			client->ban(DEFAULT_BAN_TIME);
+			//client->ban(DEFAULT_BAN_TIME);
 			client->close();
 		}
 		else if (!result) {
@@ -1114,7 +1148,7 @@ void StratumServer::on_after_share_found(uv_work_t* req, int /*status*/)
 		}
 	}
 	else if (bad_share) {
-		server->ban(share->m_clientIPv6, share->m_clientAddr, DEFAULT_BAN_TIME);
+		//server->ban(share->m_clientIPv6, share->m_clientAddr, DEFAULT_BAN_TIME);
 	}
 
 	if (share->m_allocated) {
@@ -1224,7 +1258,7 @@ bool StratumServer::StratumClient::on_read(const char* data, uint32_t size)
 	auto on_parse = [this](const char* data, uint32_t size) {
 		if (static_cast<size_t>(m_stratumReadBufBytes) + size > STRATUM_BUF_SIZE) {
 			LOGWARN(4, "client " << static_cast<const char*>(m_addrString) << " sent too long Stratum message");
-			ban(DEFAULT_BAN_TIME);
+			//ban(DEFAULT_BAN_TIME);
 			return false;
 		}
 
@@ -1252,7 +1286,7 @@ bool StratumServer::StratumClient::on_read(const char* data, uint32_t size)
 
 				*c = '\0';
 				if (!process_request(line_start, static_cast<uint32_t>(c - line_start))) {
-					ban(DEFAULT_BAN_TIME);
+					//ban(DEFAULT_BAN_TIME);
 					return false;
 				}
 
