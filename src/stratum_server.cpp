@@ -422,7 +422,7 @@ bool StratumServer::on_submit(StratumClient* client, uint32_t id, const char* jo
 				curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:5000/json_rpc");
 				curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_request);
 				curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-				curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+				curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_callback);
 				curl_easy_setopt(curl, CURLOPT_POST, 1L);
 				curl_easy_setopt(curl, CURLOPT_TIMEOUT, 3L);
 				curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 2L);
